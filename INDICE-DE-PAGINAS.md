@@ -8,3 +8,6 @@
 
 ## Modificación
 
+### Inicio
+
+01 28/08/2026 transformación de Inicio en un instructivo interactivo de UEPS por tarjetas.
