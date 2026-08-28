@@ -4,6 +4,10 @@ Instructivo interactivo para aprender los métodos contables PEPS y UEPS, diseñ
 
 ## Experiencia
 
+- Pantalla inicial para abrir un ejemplo PEPS o UEPS.
+- Formulario para cargar movimientos propios con letra, fecha, comprobante, compra/venta, cantidad y monto unitario.
+- Generación automática de tarjetas, costos de salida y existencias según el método elegido.
+- Guardado local versionado para conservar el ejercicio en el dispositivo.
 - Dieciséis tarjetas breves organizadas por los movimientos O a S.
 - Selector para alternar entre PEPS y UEPS con los resultados recalculados.
 - Navegación con botones Anterior y Siguiente.

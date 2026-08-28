@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { chapters, fullTableByMethod, fullTableGroups, lessonsByMethod, roleMeta, zoneMeta } from './lessonData'
+import { buildExerciseFlow, formatMoney, formatQuantity, parseLocalizedNumber, validateExerciseRows } from './exerciseBuilder'
 import './styles.css'
 
 // ÍNDICE DE CREACIÓN
@@ -13,6 +14,20 @@ import './styles.css'
 // 04 28/08/2026 incorporación del selector PEPS/UEPS y reorganización de controles.
 // 05 28/08/2026 ampliación y suavizado del botón Ver en la tabla.
 // 06 28/08/2026 incorporación de tabla completa progresiva con zoom táctil.
+// 07 28/08/2026 incorporación de pantalla inicial y generador de ejercicios personalizados.
+
+const STORAGE_KEY = 'peps-ueps-custom-exercise:v1'
+const EMPTY_ROW = { code: '', date: '', detail: '', operation: 'entry', quantity: '', unitPrice: '' }
+
+function readSavedExercise() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY))
+    if (saved?.version === 1 && Array.isArray(saved.rows)) return { method: saved.method === 'PEPS' ? 'PEPS' : 'UEPS', rows: saved.rows }
+  } catch {
+    // Si el guardado local está dañado, empezamos con un formulario limpio.
+  }
+  return { method: 'UEPS', rows: [] }
+}
 
 function getFactRole(label, fallback) {
   const normalized = label.toLocaleLowerCase('es')
@@ -84,7 +99,7 @@ function LessonCard({ lesson, current, total, onOpenTable }) {
   )
 }
 
-function LessonIndex({ current, method, onSelect, onClose }) {
+function LessonIndex({ current, method, flowChapters, onSelect, onClose }) {
   return (
     <div className="overlay index-overlay" onMouseDown={onClose} role="presentation">
       <aside className="index-panel" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="index-title">
@@ -92,8 +107,8 @@ function LessonIndex({ current, method, onSelect, onClose }) {
           <div><span>Índice</span><h2 id="index-title">Ficha {method}</h2></div>
           <button className="close-button" onClick={onClose} aria-label="Cerrar índice">×</button>
         </div>
-        <nav>
-          {chapters.map((chapter) => {
+        <nav style={{ '--chapter-count': flowChapters.length }}>
+          {flowChapters.map((chapter) => {
             const active = current >= chapter.start && current <= chapter.end
             const range = chapter.start === chapter.end ? `Paso ${chapter.start + 1}` : `Pasos ${chapter.start + 1}–${chapter.end + 1}`
             return (
@@ -151,14 +166,14 @@ function ZoneMap() {
   )
 }
 
-function FullTableView({ method, current, onBack, onClose }) {
+function FullTableView({ method, current, tableRows, onBack, onClose }) {
   const viewportRef = useRef(null)
   const tableRef = useRef(null)
   const pointersRef = useRef(new Map())
   const gestureRef = useRef(null)
   const viewRef = useRef({ scale: 1, x: 0, y: 0, fit: 1 })
   const [view, setView] = useState(viewRef.current)
-  const rows = fullTableByMethod[method]
+  const rows = tableRows
   const currentRow = current > 0 ? Math.floor((current - 1) / 3) : -1
   const currentStage = current > 0 ? ((current - 1) % 3) + 1 : 0
   const currentGroup = currentStage === 1 ? 'data' : currentStage === 2 ? rows[currentRow]?.operation : currentStage === 3 ? 'stock' : null
@@ -303,7 +318,7 @@ function FullTableView({ method, current, onBack, onClose }) {
           ref={tableRef}
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
         >
-          <caption>Ficha de stock {method}, movimientos O a S</caption>
+          <caption>Ficha de stock {method}, movimientos {rows.map((row) => row.code).join(', ')}</caption>
           <colgroup>
             <col className="col-movement" />
             <col className="col-date" /><col className="col-detail" />
@@ -349,7 +364,7 @@ function FullTableView({ method, current, onBack, onClose }) {
   )
 }
 
-function TableModal({ lesson, method, current, onClose }) {
+function TableModal({ lesson, method, current, tableRows, onClose }) {
   const [run, setRun] = useState(0)
   const [reveal, setReveal] = useState(false)
   const [showFullTable, setShowFullTable] = useState(false)
@@ -364,7 +379,7 @@ function TableModal({ lesson, method, current, onClose }) {
 
   return (
     <div className="overlay modal-overlay" onMouseDown={onClose} role="presentation">
-      {showFullTable ? <FullTableView method={method} current={current} onBack={() => setShowFullTable(false)} onClose={onClose} /> : (
+      {showFullTable ? <FullTableView method={method} current={current} tableRows={tableRows} onBack={() => setShowFullTable(false)} onClose={onClose} /> : (
       <section className={`table-modal ${lesson.zones.length === 2 ? 'has-two-zones' : ''}`} style={{ '--transition-color': transitionRole.color }} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="table-title">
         <div className="modal-heading">
           <div><span>{lesson.phase}</span><h2 id="table-title">Así queda en la tabla</h2></div>
@@ -391,42 +406,194 @@ function TableModal({ lesson, method, current, onClose }) {
   )
 }
 
+function HomeScreen({ savedRows, onOpenExample, onOpenBuilder }) {
+  return (
+    <main className="welcome-shell">
+      <div className="ambient ambient-one" /><div className="ambient ambient-two" />
+      <section className="welcome-card" aria-labelledby="welcome-title">
+        <span className="welcome-kicker">Aprendé paso a paso</span>
+        <div className="welcome-copy">
+          <h1 id="welcome-title">Elegí PEPS o UEPS</h1>
+          <p>Cada opción abre un ejemplo completo para recorrer con tarjetas.</p>
+        </div>
+        <div className="method-cards" role="group" aria-label="Elegir flujo inicial">
+          <button onClick={() => onOpenExample('PEPS')}>
+            <span>P</span><div><strong>PEPS</strong><small>Abrir ejemplo</small></div><ArrowIcon direction="right" />
+          </button>
+          <button onClick={() => onOpenExample('UEPS')}>
+            <span>U</span><div><strong>UEPS</strong><small>Abrir ejemplo</small></div><ArrowIcon direction="right" />
+          </button>
+        </div>
+        <div className="welcome-divider"><span>o</span></div>
+        <button className="load-data-button" onClick={onOpenBuilder}><TableIcon /><span>Cargar datos</span></button>
+        <p className="saved-exercise-note" aria-live="polite">{savedRows ? `Tenés ${savedRows} ${savedRows === 1 ? 'fila guardada' : 'filas guardadas'} en este dispositivo.` : 'También podés crear un ejercicio con tus propios datos.'}</p>
+      </section>
+    </main>
+  )
+}
+
+function DataBuilder({ rows, method, onMethodChange, onRowsChange, onLoad, onBack }) {
+  const [draft, setDraft] = useState(EMPTY_ROW)
+  const [error, setError] = useState('')
+  const visibleRows = rows.slice(-2)
+
+  const updateDraft = (field, value) => {
+    setDraft((currentDraft) => ({ ...currentDraft, [field]: value }))
+    if (error) setError('')
+  }
+
+  const addRow = (event) => {
+    event.preventDefault()
+    const code = draft.code.trim().toLocaleUpperCase('es')
+    const date = draft.date.trim()
+    const detail = draft.detail.trim()
+    const quantity = parseLocalizedNumber(draft.quantity)
+    const unitPrice = parseLocalizedNumber(draft.unitPrice)
+
+    if (!code || !date || !detail) return setError('Completá la letra, la fecha y el comprobante.')
+    if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0) return setError('Cantidad y monto deben ser números mayores que cero.')
+    if (rows.some((row) => row.code.toLocaleUpperCase('es') === code)) return setError(`La letra ${code} ya está usada.`)
+    const available = rows.reduce((stock, row) => stock + (row.operation === 'entry' ? row.quantity : -row.quantity), 0)
+    if (draft.operation === 'exit' && quantity > available) return setError(`Solo hay ${formatQuantity(available)} unidades disponibles para vender.`)
+
+    onRowsChange([...rows, { code, date, detail, operation: draft.operation, quantity, unitPrice }])
+    setDraft((currentDraft) => ({ ...EMPTY_ROW, operation: currentDraft.operation }))
+    setError('')
+  }
+
+  const loadExercise = () => {
+    const validationError = onLoad()
+    if (validationError) setError(validationError)
+  }
+
+  return (
+    <main className="builder-shell">
+      <div className="ambient ambient-one" /><div className="ambient ambient-two" />
+      <header className="builder-topbar">
+        <button className="builder-back" onClick={onBack} aria-label="Volver a la pantalla inicial"><ArrowIcon direction="left" /></button>
+        <div><span>Nuevo ejercicio</span><h1>Cargar datos</h1></div>
+        <strong>{rows.length} {rows.length === 1 ? 'fila' : 'filas'}</strong>
+      </header>
+      <form className="builder-card" onSubmit={addRow} noValidate>
+        <fieldset className="builder-method">
+          <legend>Método para resolver</legend>
+          <div>
+            {['PEPS', 'UEPS'].map((option) => <button type="button" className={method === option ? 'active' : ''} aria-pressed={method === option} onClick={() => onMethodChange(option)} key={option}>{option}</button>)}
+          </div>
+        </fieldset>
+        <div className="builder-fields">
+          <label><span>Letra de fila</span><input value={draft.code} onChange={(event) => updateDraft('code', event.target.value)} placeholder="O" maxLength="3" autoCapitalize="characters" /></label>
+          <label><span>Fecha</span><input value={draft.date} onChange={(event) => updateDraft('date', event.target.value)} placeholder="3/05" inputMode="numeric" /></label>
+          <label className="detail-field"><span>Comprobante</span><input value={draft.detail} onChange={(event) => updateDraft('detail', event.target.value)} placeholder="FD N.º 2345" /></label>
+        </div>
+        <fieldset className="operation-picker">
+          <legend>Elegir movimiento</legend>
+          <div>
+            <button type="button" className={draft.operation === 'entry' ? 'active entry-choice' : 'entry-choice'} aria-pressed={draft.operation === 'entry'} onClick={() => updateDraft('operation', 'entry')}>Compra</button>
+            <span aria-hidden="true">|</span>
+            <button type="button" className={draft.operation === 'exit' ? 'active exit-choice' : 'exit-choice'} aria-pressed={draft.operation === 'exit'} onClick={() => updateDraft('operation', 'exit')}>Venta</button>
+          </div>
+        </fieldset>
+        <div className="amount-fields">
+          <label><span>Cantidad</span><input value={draft.quantity} onChange={(event) => updateDraft('quantity', event.target.value)} placeholder="950" inputMode="decimal" /></label>
+          <label><span>Monto $ <small>por unidad</small></span><input value={draft.unitPrice} onChange={(event) => updateDraft('unitPrice', event.target.value)} placeholder="110" inputMode="decimal" /></label>
+        </div>
+        <button className="add-row-button" style={{ '--add-color': draft.operation === 'entry' ? roleMeta.entry.color : roleMeta.exit.color }} type="submit">Agregar fila</button>
+        <section className="added-rows" aria-labelledby="added-rows-title">
+          <div><strong id="added-rows-title">Filas agregadas</strong>{rows.length > 2 && <small>Últimas 2 de {rows.length}</small>}</div>
+          {visibleRows.length ? <ol>{visibleRows.map((row) => (
+            <li key={row.code}>
+              <span className={row.operation === 'entry' ? 'row-operation entry' : 'row-operation exit'}>{row.operation === 'entry' ? 'Compra' : 'Venta'}</span>
+              <strong>{row.code} · {row.date}</strong>
+              <span>{formatQuantity(row.quantity)} × {formatMoney(row.unitPrice)}</span>
+              <button type="button" onClick={() => onRowsChange(rows.filter((item) => item.code !== row.code))} aria-label={`Eliminar fila ${row.code}`}>×</button>
+            </li>
+          ))}</ol> : <p>Todavía no agregaste filas.</p>}
+        </section>
+        <p className={error ? 'builder-error visible' : 'builder-error'} role={error ? 'alert' : undefined}>{error || 'Los datos se guardan automáticamente en este dispositivo.'}</p>
+        <button className="start-exercise-button" type="button" onClick={loadExercise}>Cargar</button>
+      </form>
+    </main>
+  )
+}
+
 function App() {
+  const [savedExercise] = useState(readSavedExercise)
+  const [screen, setScreen] = useState('home')
+  const [flowType, setFlowType] = useState('example')
   const [method, setMethod] = useState('UEPS')
+  const [builderMethod, setBuilderMethod] = useState(savedExercise.method)
+  const [customRows, setCustomRows] = useState(savedExercise.rows)
   const [current, setCurrent] = useState(0)
   const [openLayer, setOpenLayer] = useState(null)
-  const lessons = lessonsByMethod[method]
+  const customFlow = useMemo(() => {
+    if (flowType !== 'custom' || screen !== 'lesson' || validateExerciseRows(customRows)) return null
+    return buildExerciseFlow(method, customRows)
+  }, [customRows, flowType, method, screen])
+  const flow = flowType === 'custom' && customFlow ? customFlow : { lessons: lessonsByMethod[method], tableRows: fullTableByMethod[method], chapters }
+  const { lessons, tableRows, chapters: flowChapters } = flow
   const lesson = lessons[current]
   const otherMethod = method === 'UEPS' ? 'PEPS' : 'UEPS'
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, method: builderMethod, rows: customRows }))
+    } catch {
+      // La app sigue funcionando aunque el navegador bloquee el almacenamiento local.
+    }
+  }, [builderMethod, customRows])
+
+  useEffect(() => {
     const handleKey = (event) => {
       if (event.key === 'Escape') setOpenLayer(null)
-      if (openLayer) return
+      if (openLayer || screen !== 'lesson') return
       if (event.key === 'ArrowRight') setCurrent((value) => Math.min(value + 1, lessons.length - 1))
       if (event.key === 'ArrowLeft') setCurrent((value) => Math.max(value - 1, 0))
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [openLayer])
+  }, [lessons.length, openLayer, screen])
 
   useEffect(() => {
-    document.title = `${method} visual | Instructivo paso a paso`
-  }, [method])
+    document.title = screen === 'home' ? 'PEPS y UEPS visual' : screen === 'builder' ? 'Cargar ejercicio | PEPS y UEPS visual' : `${method} visual | Instructivo paso a paso`
+  }, [method, screen])
 
   const goTo = (index) => { setCurrent(index); setOpenLayer(null) }
   const switchMethod = () => {
     setMethod(otherMethod)
+    if (flowType === 'custom') setBuilderMethod(otherMethod)
     setCurrent(0)
     setOpenLayer(null)
   }
+
+  const openExample = (selectedMethod) => {
+    setMethod(selectedMethod)
+    setFlowType('example')
+    setCurrent(0)
+    setOpenLayer(null)
+    setScreen('lesson')
+  }
+
+  const loadCustomExercise = () => {
+    const error = validateExerciseRows(customRows)
+    if (error) return error
+    setMethod(builderMethod)
+    setFlowType('custom')
+    setCurrent(0)
+    setOpenLayer(null)
+    setScreen('lesson')
+    return ''
+  }
+
+  if (screen === 'home') return <HomeScreen savedRows={customRows.length} onOpenExample={openExample} onOpenBuilder={() => setScreen('builder')} />
+  if (screen === 'builder') return <DataBuilder rows={customRows} method={builderMethod} onMethodChange={setBuilderMethod} onRowsChange={setCustomRows} onLoad={loadCustomExercise} onBack={() => setScreen('home')} />
 
   return (
     <main className="app-shell">
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <header className="topbar">
         <button className="top-action menu-button" onClick={() => setOpenLayer('index')} aria-label="Abrir índice" aria-expanded={openLayer === 'index'}><MenuIcon /><span>Índice</span></button>
-        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); goTo(0) }} aria-label={`Volver al inicio de ${method}`}><span>{method[0]}</span><strong>{method} visual</strong></a>
+        <button className="brand" onClick={() => { setOpenLayer(null); setScreen('home') }} aria-label="Volver a la pantalla inicial"><span>{method[0]}</span><strong>{method} visual</strong></button>
         <button className="top-action method-switch" onClick={switchMethod} aria-label={`Cambiar a ${otherMethod}`}><span>Cambiar a</span><strong>{otherMethod}</strong></button>
       </header>
       <section className="stage" aria-label={`Instructivo de ${method}`}><LessonCard lesson={lesson} current={current} total={lessons.length} onOpenTable={() => setOpenLayer('table')} /></section>
@@ -435,8 +602,8 @@ function App() {
         <div className="progress" aria-label={`Paso ${current + 1} de ${lessons.length}`}>{lessons.map((item, index) => <i key={`${item.chapter}-${index}`} className={index === current ? 'active' : ''} />)}</div>
         <button aria-label="Siguiente" onClick={() => setCurrent((value) => Math.min(value + 1, lessons.length - 1))} disabled={current === lessons.length - 1}><span>Siguiente</span><ArrowIcon direction="right" /></button>
       </footer>
-      {openLayer === 'index' && <LessonIndex current={current} method={method} onSelect={goTo} onClose={() => setOpenLayer(null)} />}
-      {openLayer === 'table' && <TableModal lesson={lesson} method={method} current={current} onClose={() => setOpenLayer(null)} />}
+      {openLayer === 'index' && <LessonIndex current={current} method={method} flowChapters={flowChapters} onSelect={goTo} onClose={() => setOpenLayer(null)} />}
+      {openLayer === 'table' && <TableModal lesson={lesson} method={method} current={current} tableRows={tableRows} onClose={() => setOpenLayer(null)} />}
     </main>
   )
 }

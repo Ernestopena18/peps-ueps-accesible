@@ -21,3 +21,5 @@
 05 28/08/2026 ampliación y suavizado del botón Ver en la tabla.
 
 06 28/08/2026 incorporación de tabla completa progresiva con zoom táctil.
+
+07 28/08/2026 incorporación de pantalla inicial y generador de ejercicios personalizados.
