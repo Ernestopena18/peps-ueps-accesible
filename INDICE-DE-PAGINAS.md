@@ -17,3 +17,5 @@
 03 28/08/2026 aplicación del código cromático pedagógico a toda la experiencia.
 
 04 28/08/2026 incorporación del selector PEPS/UEPS y reorganización de controles.
+
+05 28/08/2026 ampliación y suavizado del botón Ver en la tabla.
