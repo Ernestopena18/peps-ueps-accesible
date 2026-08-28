@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { chapters, lessons, roleMeta, zoneMeta } from './lessonData'
+import { chapters, lessonsByMethod, roleMeta, zoneMeta } from './lessonData'
 import './styles.css'
 
 // ÍNDICE DE CREACIÓN
@@ -10,6 +10,7 @@ import './styles.css'
 // 01 28/08/2026 transformación de Inicio en un instructivo interactivo de UEPS por tarjetas.
 // 02 28/08/2026 reorganización del instructivo y animación de recortes de la ficha de stock.
 // 03 28/08/2026 aplicación del código cromático pedagógico a toda la experiencia.
+// 04 28/08/2026 incorporación del selector PEPS/UEPS y reorganización de controles.
 
 function getFactRole(label, fallback) {
   const normalized = label.toLocaleLowerCase('es')
@@ -50,13 +51,12 @@ function ReplayIcon() {
   )
 }
 
-function LessonCard({ lesson, current, total }) {
+function LessonCard({ lesson, current, total, onOpenTable }) {
   const formulaLabelRole = roleMeta[lesson.formulaRoles[0]]
-  const formulaResultRole = roleMeta[lesson.formulaRoles[1]]
   return (
     <article
       className={`lesson-card role-${lesson.role}`}
-      style={{ '--lesson-accent': roleMeta[lesson.role].color, '--formula-label': formulaLabelRole.color, '--formula-result': formulaResultRole.color }}
+      style={{ '--lesson-accent': roleMeta[lesson.role].color, '--formula-label': formulaLabelRole.color }}
       aria-live="polite"
     >
       <div className="lesson-heading">
@@ -77,16 +77,17 @@ function LessonCard({ lesson, current, total }) {
         <span>{lesson.formula[0]}</span><b>{lesson.formula[1]}</b><i aria-hidden="true">→</i><strong>{lesson.formula[2]}</strong>
       </div>
       <p className="lesson-note"><span aria-hidden="true">✦</span>{lesson.note}</p>
+      <button className="card-table-button" onClick={onOpenTable}><TableIcon />Ver en la tabla</button>
     </article>
   )
 }
 
-function LessonIndex({ current, onSelect, onClose }) {
+function LessonIndex({ current, method, onSelect, onClose }) {
   return (
     <div className="overlay index-overlay" onMouseDown={onClose} role="presentation">
       <aside className="index-panel" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="index-title">
         <div className="panel-heading">
-          <div><span>Índice</span><h2 id="index-title">Ficha UEPS</h2></div>
+          <div><span>Índice</span><h2 id="index-title">Ficha {method}</h2></div>
           <button className="close-button" onClick={onClose} aria-label="Cerrar índice">×</button>
         </div>
         <nav>
@@ -185,9 +186,12 @@ function TableModal({ lesson, onClose }) {
 }
 
 function App() {
+  const [method, setMethod] = useState('UEPS')
   const [current, setCurrent] = useState(0)
   const [openLayer, setOpenLayer] = useState(null)
+  const lessons = lessonsByMethod[method]
   const lesson = lessons[current]
+  const otherMethod = method === 'UEPS' ? 'PEPS' : 'UEPS'
 
   useEffect(() => {
     const handleKey = (event) => {
@@ -200,23 +204,32 @@ function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [openLayer])
 
+  useEffect(() => {
+    document.title = `${method} visual | Instructivo paso a paso`
+  }, [method])
+
   const goTo = (index) => { setCurrent(index); setOpenLayer(null) }
+  const switchMethod = () => {
+    setMethod(otherMethod)
+    setCurrent(0)
+    setOpenLayer(null)
+  }
 
   return (
     <main className="app-shell">
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <header className="topbar">
         <button className="top-action menu-button" onClick={() => setOpenLayer('index')} aria-label="Abrir índice" aria-expanded={openLayer === 'index'}><MenuIcon /><span>Índice</span></button>
-        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); goTo(0) }} aria-label="Volver al inicio de UEPS"><span>U</span><strong>UEPS visual</strong></a>
-        <button className="top-action table-button" onClick={() => setOpenLayer('table')} aria-label="Abrir Así queda en la tabla" aria-expanded={openLayer === 'table'}><span>Así queda en la tabla</span><TableIcon /></button>
+        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); goTo(0) }} aria-label={`Volver al inicio de ${method}`}><span>{method[0]}</span><strong>{method} visual</strong></a>
+        <button className="top-action method-switch" onClick={switchMethod} aria-label={`Cambiar a ${otherMethod}`}><span>Cambiar a</span><strong>{otherMethod}</strong></button>
       </header>
-      <section className="stage" aria-label="Instructivo de UEPS"><LessonCard lesson={lesson} current={current} total={lessons.length} /></section>
+      <section className="stage" aria-label={`Instructivo de ${method}`}><LessonCard lesson={lesson} current={current} total={lessons.length} onOpenTable={() => setOpenLayer('table')} /></section>
       <footer className="lesson-nav">
         <button aria-label="Anterior" onClick={() => setCurrent((value) => Math.max(value - 1, 0))} disabled={current === 0}><ArrowIcon direction="left" /><span>Anterior</span></button>
         <div className="progress" aria-label={`Paso ${current + 1} de ${lessons.length}`}>{lessons.map((item, index) => <i key={`${item.chapter}-${index}`} className={index === current ? 'active' : ''} />)}</div>
         <button aria-label="Siguiente" onClick={() => setCurrent((value) => Math.min(value + 1, lessons.length - 1))} disabled={current === lessons.length - 1}><span>Siguiente</span><ArrowIcon direction="right" /></button>
       </footer>
-      {openLayer === 'index' && <LessonIndex current={current} onSelect={goTo} onClose={() => setOpenLayer(null)} />}
+      {openLayer === 'index' && <LessonIndex current={current} method={method} onSelect={goTo} onClose={() => setOpenLayer(null)} />}
       {openLayer === 'table' && <TableModal lesson={lesson} onClose={() => setOpenLayer(null)} />}
     </main>
   )

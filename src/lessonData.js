@@ -16,7 +16,7 @@ export const zoneMeta = {
   stock: roleMeta.stock,
 }
 
-export const lessons = [
+export const uepsLessons = [
   {
     chapter: 'Guía',
     role: 'calculation',
@@ -235,6 +235,65 @@ export const lessons = [
     zones: [zone('stock', 'Fila del 12/05', [['Cantidad', '370'], ['Precio unitario', '300 a $110\n70 a $130'], ['Precio total', '$42.100']])],
   },
 ]
+
+const pepsVariants = {
+  0: {
+    title: 'Cómo leer la ficha PEPS',
+    intro: 'Primero en entrar, primero en salir.',
+    facts: [
+      ['Regla principal', 'En una venta usamos primero el lote más antiguo.'],
+      ['Código de color', 'Cada color señala una zona distinta de la ficha.'],
+    ],
+    formula: ['PEPS', 'PRIMERO EN ENTRAR', 'PRIMERO EN SALIR'],
+  },
+  8: {
+    title: 'Resolver la salida con PEPS',
+    intro: 'Usamos 850 unidades del lote más antiguo, comprado a $110.',
+    facts: [['Primer lote', '850 × $110 = $93.500'], ['Lote más nuevo', 'No se usa en esta salida']],
+    formula: ['Costo de salida', '850 × $110', '$93.500'],
+    note: 'En PEPS sale primero el lote de $110, porque fue el primero en entrar.',
+    zones: [zone('exit', 'Fila del 8/05', [['Cantidad', '850'], ['Precio unitario', '850 a $110'], ['Precio total', '$93.500']])],
+  },
+  9: {
+    title: 'Descubrir qué lotes quedaron',
+    intro: 'Del lote de $110 quedan 100 unidades; el lote de $125 se mantiene completo.',
+    facts: [['Cantidad restante', '1.150 − 850 = 300'], ['Lotes restantes', '100 a $110 · 200 a $125']],
+    formula: ['Existencia', '$11.000 + $25.000', '$36.000'],
+    note: 'Después de la venta quedan 100 unidades del primer lote y las 200 del segundo.',
+    zones: [zone('stock', 'Fila del 8/05', [['Cantidad', '300'], ['Precio unitario', '100 a $110\n200 a $125'], ['Precio total', '$36.000']])],
+  },
+  12: {
+    intro: 'Sumamos los dos lotes anteriores y la compra nueva sin mezclar sus costos.',
+    facts: [['Cantidad', '300 + 220 = 520'], ['Lotes', '100 a $110 · 200 a $125 · 220 a $130']],
+    formula: ['Precio total', '$36.000 + $28.600', '$64.600'],
+    note: 'En PEPS el lote de $110 sigue siendo el primero que debe salir.',
+    zones: [zone('stock', 'Fila del 10/05', [['Cantidad', '520'], ['Precio unitario', '100 a $110\n200 a $125\n220 a $130'], ['Precio total', '$64.600']])],
+  },
+  14: {
+    title: 'Elegir los lotes que salen',
+    intro: 'Salen primero las 100 unidades a $110; completamos con 50 unidades a $125.',
+    facts: [['Primer lote', '100 × $110 = $11.000'], ['Segundo lote', '50 × $125 = $6.250']],
+    formula: ['Costo de salida', '$11.000 + $6.250', '$17.250'],
+    note: 'El lote de $130 no se toca porque entró último.',
+    zones: [zone('exit', 'Fila del 12/05', [['Cantidad', '150'], ['Precio unitario', '100 a $110\n50 a $125'], ['Precio total', '$17.250']])],
+  },
+  15: {
+    intro: 'Quedan 150 unidades a $125 y las 220 unidades a $130.',
+    facts: [['Cantidad final', '520 − 150 = 370'], ['Lotes finales', '150 a $125 · 220 a $130']],
+    formula: ['Existencia final', '$18.750 + $28.600', '$47.350'],
+    note: 'Resultado: 370 unidades por un valor total de $47.350.',
+    zones: [zone('stock', 'Fila del 12/05', [['Cantidad', '370'], ['Precio unitario', '150 a $125\n220 a $130'], ['Precio total', '$47.350']])],
+  },
+}
+
+export const pepsLessons = uepsLessons.map((lesson, index) => (
+  pepsVariants[index] ? { ...lesson, ...pepsVariants[index] } : lesson
+))
+
+export const lessonsByMethod = {
+  UEPS: uepsLessons,
+  PEPS: pepsLessons,
+}
 
 export const chapters = [
   { code: 'Guía', title: 'Cómo leer la ficha', start: 0, end: 0, role: 'calculation' },

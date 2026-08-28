@@ -1,12 +1,14 @@
-# UEPS visual
+# PEPS y UEPS visual
 
-Instructivo interactivo para aprender el método contable UEPS, diseñado con especial atención a personas con dislexia y discalculia.
+Instructivo interactivo para aprender los métodos contables PEPS y UEPS, diseñado con especial atención a personas con dislexia y discalculia.
 
 ## Experiencia
 
 - Dieciséis tarjetas breves organizadas por los movimientos O a S.
+- Selector para alternar entre PEPS y UEPS con los resultados recalculados.
 - Navegación con botones Anterior y Siguiente.
 - Índice glass agrupado para saltar a cada movimiento.
+- Botón “Ver en la tabla” dentro de cada tarjeta.
 - Recortes responsive de Datos, Entrada, Salida y Existencia.
 - Transición que muestra la fila vacía y luego agrega los datos del paso.
 - Botón para repetir cada transición.
