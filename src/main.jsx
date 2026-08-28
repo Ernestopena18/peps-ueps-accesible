@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { chapters, lessons, zoneMeta } from './lessonData'
+import { chapters, lessons, roleMeta, zoneMeta } from './lessonData'
 import './styles.css'
 
 // ÍNDICE DE CREACIÓN
@@ -9,6 +9,17 @@ import './styles.css'
 // ÍNDICE DE MODIFICACIONES
 // 01 28/08/2026 transformación de Inicio en un instructivo interactivo de UEPS por tarjetas.
 // 02 28/08/2026 reorganización del instructivo y animación de recortes de la ficha de stock.
+// 03 28/08/2026 aplicación del código cromático pedagógico a toda la experiencia.
+
+function getFactRole(label, fallback) {
+  const normalized = label.toLocaleLowerCase('es')
+  if (normalized.includes('precio unitario') || normalized.includes('precio de venta')) return 'unit'
+  if (normalized.includes('fecha') || normalized.includes('detalle')) return 'data'
+  if (normalized.includes('cantidad que sale') || normalized.includes('salida completa')) return 'exit'
+  if (normalized.includes('costo')) return 'calculation'
+  if (normalized.includes('lote') || normalized.includes('existencia') || normalized.includes('restante') || normalized.includes('final')) return 'stock'
+  return fallback
+}
 
 function MenuIcon() {
   return <span className="menu-icon" aria-hidden="true"><i /><i /><i /></span>
@@ -40,8 +51,14 @@ function ReplayIcon() {
 }
 
 function LessonCard({ lesson, current, total }) {
+  const formulaLabelRole = roleMeta[lesson.formulaRoles[0]]
+  const formulaResultRole = roleMeta[lesson.formulaRoles[1]]
   return (
-    <article className="lesson-card" style={{ '--lesson-accent': lesson.accent }} aria-live="polite">
+    <article
+      className={`lesson-card role-${lesson.role}`}
+      style={{ '--lesson-accent': roleMeta[lesson.role].color, '--formula-label': formulaLabelRole.color, '--formula-result': formulaResultRole.color }}
+      aria-live="polite"
+    >
       <div className="lesson-heading">
         <span className="phase-pill">{lesson.phase}</span>
         <span className="step-count">{String(current + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}</span>
@@ -51,9 +68,10 @@ function LessonCard({ lesson, current, total }) {
         <p className="intro">{lesson.intro}</p>
       </div>
       <div className="facts-grid">
-        {lesson.facts.map(([label, value]) => (
-          <div className="fact" key={label}><span>{label}</span><strong>{value}</strong></div>
-        ))}
+        {lesson.facts.map(([label, value]) => {
+          const factRole = getFactRole(label, lesson.role)
+          return <div className={`fact fact-${factRole}`} style={{ '--fact-color': roleMeta[factRole].color }} key={label}><span>{label}</span><strong>{value}</strong></div>
+        })}
       </div>
       <div className="formula" aria-label={`${lesson.formula[0]}: ${lesson.formula[1]} → ${lesson.formula[2]}`}>
         <span>{lesson.formula[0]}</span><b>{lesson.formula[1]}</b><i aria-hidden="true">→</i><strong>{lesson.formula[2]}</strong>
@@ -66,9 +84,9 @@ function LessonCard({ lesson, current, total }) {
 function LessonIndex({ current, onSelect, onClose }) {
   return (
     <div className="overlay index-overlay" onMouseDown={onClose} role="presentation">
-      <aside className="index-panel" onMouseDown={(event) => event.stopPropagation()} aria-label="Índice de movimientos">
+      <aside className="index-panel" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="index-title">
         <div className="panel-heading">
-          <div><span>Índice</span><h2>Ficha UEPS</h2></div>
+          <div><span>Índice</span><h2 id="index-title">Ficha UEPS</h2></div>
           <button className="close-button" onClick={onClose} aria-label="Cerrar índice">×</button>
         </div>
         <nav>
@@ -76,7 +94,7 @@ function LessonIndex({ current, onSelect, onClose }) {
             const active = current >= chapter.start && current <= chapter.end
             const range = chapter.start === chapter.end ? `Paso ${chapter.start + 1}` : `Pasos ${chapter.start + 1}–${chapter.end + 1}`
             return (
-              <button className={active ? 'index-item active' : 'index-item'} key={chapter.code} onClick={() => onSelect(chapter.start)} aria-current={active ? 'step' : undefined}>
+              <button className={active ? 'index-item active' : 'index-item'} style={{ '--chapter-color': roleMeta[chapter.role].color }} key={chapter.code} onClick={() => onSelect(chapter.start)} aria-current={active ? 'step' : undefined}>
                 <span>{chapter.code}</span>
                 <div><small>{range}</small><strong>{chapter.title}</strong></div>
               </button>
@@ -112,15 +130,18 @@ function ZoneCrop({ zone, reveal, run }) {
 
 function ZoneMap() {
   const items = [
+    ['data', 'Datos', 'Información del ejercicio'],
     ['entry', 'Compras', 'Se anotan en Entrada'],
     ['exit', 'Ventas', 'Se anotan en Salida'],
     ['stock', 'Existencia', 'Se actualiza siempre'],
+    ['unit', 'Precio unitario', 'Se identifica en celeste'],
+    ['calculation', 'Cuentas', 'Operaciones y resultados'],
   ]
   return (
     <div className="zone-map">
       {items.map(([type, title, description]) => (
-        <div className={`map-item zone-${type}`} style={{ '--zone-color': zoneMeta[type].color }} key={type}>
-          <span>{zoneMeta[type].label}</span><strong>{title}</strong><p>{description}</p>
+        <div className={`map-item zone-${type}`} style={{ '--zone-color': roleMeta[type].color }} key={type}>
+          <span>{roleMeta[type].label}</span><strong>{title}</strong><p>{description}</p>
         </div>
       ))}
     </div>
@@ -137,9 +158,11 @@ function TableModal({ lesson, onClose }) {
     return () => window.clearTimeout(timer)
   }, [lesson, run])
 
+  const transitionRole = lesson.zones.length ? zoneMeta[lesson.zones[lesson.zones.length - 1].type] : roleMeta[lesson.role]
+
   return (
     <div className="overlay modal-overlay" onMouseDown={onClose} role="presentation">
-      <section className={`table-modal ${lesson.zones.length === 2 ? 'has-two-zones' : ''}`} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="table-title">
+      <section className={`table-modal ${lesson.zones.length === 2 ? 'has-two-zones' : ''}`} style={{ '--transition-color': transitionRole.color }} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="table-title">
         <div className="modal-heading">
           <div><span>{lesson.phase}</span><h2 id="table-title">Así queda en la tabla</h2></div>
           <button className="close-button" onClick={onClose} aria-label="Cerrar tabla">×</button>
@@ -189,9 +212,9 @@ function App() {
       </header>
       <section className="stage" aria-label="Instructivo de UEPS"><LessonCard lesson={lesson} current={current} total={lessons.length} /></section>
       <footer className="lesson-nav">
-        <button onClick={() => setCurrent((value) => Math.max(value - 1, 0))} disabled={current === 0}><ArrowIcon direction="left" /><span>Anterior</span></button>
+        <button aria-label="Anterior" onClick={() => setCurrent((value) => Math.max(value - 1, 0))} disabled={current === 0}><ArrowIcon direction="left" /><span>Anterior</span></button>
         <div className="progress" aria-label={`Paso ${current + 1} de ${lessons.length}`}>{lessons.map((item, index) => <i key={`${item.chapter}-${index}`} className={index === current ? 'active' : ''} />)}</div>
-        <button onClick={() => setCurrent((value) => Math.min(value + 1, lessons.length - 1))} disabled={current === lessons.length - 1}><span>Siguiente</span><ArrowIcon direction="right" /></button>
+        <button aria-label="Siguiente" onClick={() => setCurrent((value) => Math.min(value + 1, lessons.length - 1))} disabled={current === lessons.length - 1}><span>Siguiente</span><ArrowIcon direction="right" /></button>
       </footer>
       {openLayer === 'index' && <LessonIndex current={current} onSelect={goTo} onClose={() => setOpenLayer(null)} />}
       {openLayer === 'table' && <TableModal lesson={lesson} onClose={() => setOpenLayer(null)} />}

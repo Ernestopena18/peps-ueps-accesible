@@ -12,6 +12,15 @@ Instructivo interactivo para aprender el método contable UEPS, diseñado con es
 - Botón para repetir cada transición.
 - Diseño responsive de una sola pantalla, sin scroll.
 
+## Código de color pedagógico
+
+- Amarillo `#f6dc59`: Datos.
+- Verde `#87ca62`: Entrada.
+- Rosa `#ec82ad`: Salida.
+- Naranja `#f4a146`: Existencia.
+- Celeste `#9ed7e4`: Precio unitario.
+- Violeta `#9f7aca`: Cuentas y resultados.
+
 ## Desarrollo local
 
 ```bash
