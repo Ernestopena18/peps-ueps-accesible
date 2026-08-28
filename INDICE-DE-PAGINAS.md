@@ -11,3 +11,5 @@
 ### Inicio
 
 01 28/08/2026 transformación de Inicio en un instructivo interactivo de UEPS por tarjetas.
+
+02 28/08/2026 reorganización del instructivo y animación de recortes de la ficha de stock.
