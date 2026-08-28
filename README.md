@@ -10,6 +10,8 @@ Instructivo interactivo para aprender los métodos contables PEPS y UEPS, diseñ
 - Índice glass agrupado para saltar a cada movimiento.
 - Botón “Ver en la tabla” dentro de cada tarjeta.
 - Recortes responsive de Datos, Entrada, Salida y Existencia.
+- Vista de la tabla completa con avance acumulado y resaltado del paso actual.
+- Zoom por pellizco, arrastre y controles accesibles para acercar, alejar o ajustar.
 - Transición que muestra la fila vacía y luego agrega los datos del paso.
 - Botón para repetir cada transición.
 - Diseño responsive de una sola pantalla, sin scroll.

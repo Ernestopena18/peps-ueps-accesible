@@ -19,3 +19,5 @@
 04 28/08/2026 incorporación del selector PEPS/UEPS y reorganización de controles.
 
 05 28/08/2026 ampliación y suavizado del botón Ver en la tabla.
+
+06 28/08/2026 incorporación de tabla completa progresiva con zoom táctil.

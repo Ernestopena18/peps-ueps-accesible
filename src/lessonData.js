@@ -295,6 +295,72 @@ export const lessonsByMethod = {
   PEPS: pepsLessons,
 }
 
+export const fullTableGroups = [
+  { key: 'data', label: 'Datos', columns: [['date', 'Fecha'], ['detail', 'Detalle']] },
+  { key: 'entry', label: 'Entrada', columns: [['quantity', 'Cantidad'], ['unit', 'Precio unitario'], ['total', 'Precio total']] },
+  { key: 'exit', label: 'Salida', columns: [['quantity', 'Cantidad'], ['unit', 'Precio unitario'], ['total', 'Precio total']] },
+  { key: 'stock', label: 'Existencia', columns: [['quantity', 'Cantidad'], ['unit', 'Precio unitario'], ['total', 'Precio total']] },
+]
+
+const baseTableRows = [
+  {
+    code: 'O', operation: 'entry',
+    data: { date: '3/05', detail: 'Factura Original 635' },
+    entry: { quantity: '950', unit: '$110', total: '$104.500' },
+    exit: {},
+    stock: { quantity: '950', unit: '950 a $110', total: '$104.500' },
+  },
+  {
+    code: 'P', operation: 'entry',
+    data: { date: '5/05', detail: 'Factura Original 640' },
+    entry: { quantity: '200', unit: '$125', total: '$25.000' },
+    exit: {},
+    stock: { quantity: '1.150', unit: '950 a $110\n200 a $125', total: '$129.500' },
+  },
+  {
+    code: 'Q', operation: 'exit',
+    data: { date: '8/05', detail: 'Factura Duplicado 650' },
+    entry: {},
+    exit: { quantity: '850', unit: '200 a $125\n650 a $110', total: '$96.500' },
+    stock: { quantity: '300', unit: '300 a $110', total: '$33.000' },
+  },
+  {
+    code: 'R', operation: 'entry',
+    data: { date: '10/05', detail: 'Factura Original 645' },
+    entry: { quantity: '220', unit: '$130', total: '$28.600' },
+    exit: {},
+    stock: { quantity: '520', unit: '300 a $110\n220 a $130', total: '$61.600' },
+  },
+  {
+    code: 'S', operation: 'exit',
+    data: { date: '12/05', detail: 'Factura Duplicado 658' },
+    entry: {},
+    exit: { quantity: '150', unit: '150 a $130', total: '$19.500' },
+    stock: { quantity: '370', unit: '300 a $110\n70 a $130', total: '$42.100' },
+  },
+]
+
+export const fullTableByMethod = {
+  UEPS: baseTableRows,
+  PEPS: baseTableRows.map((row) => {
+    if (row.code === 'Q') return {
+      ...row,
+      exit: { quantity: '850', unit: '850 a $110', total: '$93.500' },
+      stock: { quantity: '300', unit: '100 a $110\n200 a $125', total: '$36.000' },
+    }
+    if (row.code === 'R') return {
+      ...row,
+      stock: { quantity: '520', unit: '100 a $110\n200 a $125\n220 a $130', total: '$64.600' },
+    }
+    if (row.code === 'S') return {
+      ...row,
+      exit: { quantity: '150', unit: '100 a $110\n50 a $125', total: '$17.250' },
+      stock: { quantity: '370', unit: '150 a $125\n220 a $130', total: '$47.350' },
+    }
+    return row
+  }),
+}
+
 export const chapters = [
   { code: 'Guía', title: 'Cómo leer la ficha', start: 0, end: 0, role: 'calculation' },
   { code: 'O', title: 'Primera compra', start: 1, end: 3, role: 'entry' },

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { chapters, lessonsByMethod, roleMeta, zoneMeta } from './lessonData'
+import { chapters, fullTableByMethod, fullTableGroups, lessonsByMethod, roleMeta, zoneMeta } from './lessonData'
 import './styles.css'
 
 // ÍNDICE DE CREACIÓN
@@ -12,6 +12,7 @@ import './styles.css'
 // 03 28/08/2026 aplicación del código cromático pedagógico a toda la experiencia.
 // 04 28/08/2026 incorporación del selector PEPS/UEPS y reorganización de controles.
 // 05 28/08/2026 ampliación y suavizado del botón Ver en la tabla.
+// 06 28/08/2026 incorporación de tabla completa progresiva con zoom táctil.
 
 function getFactRole(label, fallback) {
   const normalized = label.toLocaleLowerCase('es')
@@ -150,9 +151,208 @@ function ZoneMap() {
   )
 }
 
-function TableModal({ lesson, onClose }) {
+function FullTableView({ method, current, onBack, onClose }) {
+  const viewportRef = useRef(null)
+  const tableRef = useRef(null)
+  const pointersRef = useRef(new Map())
+  const gestureRef = useRef(null)
+  const viewRef = useRef({ scale: 1, x: 0, y: 0, fit: 1 })
+  const [view, setView] = useState(viewRef.current)
+  const rows = fullTableByMethod[method]
+  const currentRow = current > 0 ? Math.floor((current - 1) / 3) : -1
+  const currentStage = current > 0 ? ((current - 1) % 3) + 1 : 0
+  const currentGroup = currentStage === 1 ? 'data' : currentStage === 2 ? rows[currentRow]?.operation : currentStage === 3 ? 'stock' : null
+  const currentMeta = currentGroup ? roleMeta[currentGroup] : null
+
+  const commitView = (nextView) => {
+    viewRef.current = nextView
+    setView(nextView)
+  }
+
+  const fitTable = () => {
+    const viewport = viewportRef.current
+    const table = tableRef.current
+    if (!viewport || !table) return
+    const viewportBox = viewport.getBoundingClientRect()
+    const tableWidth = table.offsetWidth
+    const tableHeight = table.offsetHeight
+    if (!tableWidth || !tableHeight) return
+    const fit = Math.min((viewportBox.width - 24) / tableWidth, (viewportBox.height - 24) / tableHeight, 1)
+    commitView({
+      scale: fit,
+      fit,
+      x: (viewportBox.width - tableWidth * fit) / 2,
+      y: (viewportBox.height - tableHeight * fit) / 2,
+    })
+  }
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(fitTable)
+    const observer = new ResizeObserver(fitTable)
+    if (viewportRef.current) observer.observe(viewportRef.current)
+    if (tableRef.current) observer.observe(tableRef.current)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [method, current])
+
+  const zoomAt = (requestedScale, clientX, clientY) => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const previous = viewRef.current
+    const minScale = previous.fit * .72
+    const nextScale = Math.min(Math.max(requestedScale, minScale), 3.2)
+    const bounds = viewport.getBoundingClientRect()
+    const centerX = clientX === undefined ? bounds.width / 2 : clientX - bounds.left
+    const centerY = clientY === undefined ? bounds.height / 2 : clientY - bounds.top
+    const worldX = (centerX - previous.x) / previous.scale
+    const worldY = (centerY - previous.y) / previous.scale
+    commitView({ ...previous, scale: nextScale, x: centerX - worldX * nextScale, y: centerY - worldY * nextScale })
+  }
+
+  const handlePointerDown = (event) => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const points = [...pointersRef.current.values()]
+    if (points.length === 1) {
+      gestureRef.current = { type: 'pan', point: points[0], view: viewRef.current }
+    } else if (points.length === 2) {
+      const [first, second] = points
+      gestureRef.current = {
+        type: 'pinch',
+        distance: Math.hypot(second.x - first.x, second.y - first.y),
+        center: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+        view: viewRef.current,
+      }
+    }
+  }
+
+  const handlePointerMove = (event) => {
+    if (!pointersRef.current.has(event.pointerId)) return
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const points = [...pointersRef.current.values()]
+    const gesture = gestureRef.current
+    if (!gesture) return
+    if (points.length === 2 && gesture.type === 'pinch') {
+      const [first, second] = points
+      const distance = Math.hypot(second.x - first.x, second.y - first.y)
+      const center = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
+      const bounds = viewportRef.current.getBoundingClientRect()
+      const startCenterX = gesture.center.x - bounds.left
+      const startCenterY = gesture.center.y - bounds.top
+      const nextCenterX = center.x - bounds.left
+      const nextCenterY = center.y - bounds.top
+      const scale = Math.min(Math.max(gesture.view.scale * (distance / Math.max(gesture.distance, 1)), gesture.view.fit * .72), 3.2)
+      const worldX = (startCenterX - gesture.view.x) / gesture.view.scale
+      const worldY = (startCenterY - gesture.view.y) / gesture.view.scale
+      commitView({ ...gesture.view, scale, x: nextCenterX - worldX * scale, y: nextCenterY - worldY * scale })
+    } else if (points.length === 1 && gesture.type === 'pan') {
+      const point = points[0]
+      commitView({ ...gesture.view, x: gesture.view.x + point.x - gesture.point.x, y: gesture.view.y + point.y - gesture.point.y })
+    }
+  }
+
+  const handlePointerEnd = (event) => {
+    pointersRef.current.delete(event.pointerId)
+    const points = [...pointersRef.current.values()]
+    gestureRef.current = points.length === 1 ? { type: 'pan', point: points[0], view: viewRef.current } : null
+  }
+
+  const groupIsReached = (rowIndex, row, groupKey) => {
+    if (currentRow < 0 || rowIndex > currentRow) return false
+    if (rowIndex < currentRow) return true
+    if (groupKey === 'data') return currentStage >= 1
+    if (groupKey === row.operation) return currentStage >= 2
+    if (groupKey === 'stock') return currentStage >= 3
+    return false
+  }
+
+  return (
+    <section className="table-modal full-table-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="full-table-title">
+      <div className="modal-heading full-table-heading">
+        <div><span>Ficha {method}</span><h2 id="full-table-title">Tabla completa</h2></div>
+        <button className="close-button" onClick={onClose} aria-label="Cerrar tabla completa">×</button>
+      </div>
+      <div className="full-table-toolbar">
+        <button className="back-to-crop" onClick={onBack} aria-label="Volver al recorte"><ArrowIcon direction="left" /><span>Volver al recorte</span></button>
+        <p className="current-completion" style={{ '--current-color': currentMeta?.color || '#d7dcda' }} aria-live="polite">
+          <i aria-hidden="true" />
+          {currentMeta ? <>Completado en este paso: <strong>{currentMeta.label} · {rows[currentRow].code}</strong></> : 'La guía todavía no completa ninguna celda.'}
+        </p>
+        <div className="zoom-controls" role="group" aria-label="Controles de zoom">
+          <button onClick={() => zoomAt(view.scale / 1.25)} aria-label="Alejar tabla">−</button>
+          <output aria-label="Nivel de zoom">{Math.round(view.scale * 100)}%</output>
+          <button onClick={() => zoomAt(view.scale * 1.25)} aria-label="Acercar tabla">+</button>
+          <button className="fit-table-button" onClick={fitTable}>Ajustar</button>
+        </div>
+      </div>
+      <div
+        className="full-table-viewport"
+        ref={viewportRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onWheel={(event) => { event.preventDefault(); zoomAt(viewRef.current.scale * (event.deltaY > 0 ? .9 : 1.1), event.clientX, event.clientY) }}
+        role="region"
+        aria-label="Tabla ampliable. Pellizcá con dos dedos para acercar o alejar y arrastrá para moverla."
+      >
+        <table
+          className="complete-stock-table"
+          ref={tableRef}
+          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+        >
+          <caption>Ficha de stock {method}, movimientos O a S</caption>
+          <colgroup>
+            <col className="col-movement" />
+            <col className="col-date" /><col className="col-detail" />
+            <col className="col-quantity" /><col className="col-unit" /><col className="col-total" />
+            <col className="col-quantity" /><col className="col-unit" /><col className="col-total" />
+            <col className="col-quantity" /><col className="col-unit" /><col className="col-total" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th rowSpan="2" scope="col">Mov.</th>
+              {fullTableGroups.map((group) => <th className={`group-heading group-${group.key}`} style={{ '--group-color': roleMeta[group.key].color }} colSpan={group.columns.length} scope="colgroup" key={group.key}>{group.label}</th>)}
+            </tr>
+            <tr>
+              {fullTableGroups.flatMap((group) => group.columns.map(([, label]) => <th className={`column-heading group-${group.key}`} style={{ '--group-color': roleMeta[group.key].color }} scope="col" key={`${group.key}-${label}`}>{label}</th>))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => {
+              const rowStarted = currentRow >= rowIndex
+              return (
+                <tr key={row.code}>
+                  <th scope="row"><span className="movement-code">{row.code}</span></th>
+                  {fullTableGroups.flatMap((group) => {
+                    const reached = groupIsReached(rowIndex, row, group.key)
+                    const applicable = group.key === 'data' || group.key === 'stock' || group.key === row.operation
+                    const isCurrent = rowIndex === currentRow && group.key === currentGroup
+                    return group.columns.map(([field, label]) => {
+                      const value = row[group.key]?.[field]
+                      const shownValue = reached && value ? value : !applicable && rowStarted ? '—' : ''
+                      const stateClass = !applicable && rowStarted ? 'is-not-applicable' : isCurrent ? 'is-current-step' : reached ? 'is-completed' : 'is-pending'
+                      const accessibleValue = shownValue || 'Pendiente'
+                      return <td className={`${stateClass} group-${group.key}`} style={{ '--cell-color': roleMeta[group.key].color }} aria-label={`${row.code}, ${group.label}, ${label}: ${accessibleValue}`} key={`${row.code}-${group.key}-${field}`}><span>{shownValue}</span></td>
+                    })
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <p className="pinch-hint">Pellizcá para ampliar · Arrastrá para mover</p>
+      </div>
+    </section>
+  )
+}
+
+function TableModal({ lesson, method, current, onClose }) {
   const [run, setRun] = useState(0)
   const [reveal, setReveal] = useState(false)
+  const [showFullTable, setShowFullTable] = useState(false)
 
   useEffect(() => {
     setReveal(false)
@@ -164,6 +364,7 @@ function TableModal({ lesson, onClose }) {
 
   return (
     <div className="overlay modal-overlay" onMouseDown={onClose} role="presentation">
+      {showFullTable ? <FullTableView method={method} current={current} onBack={() => setShowFullTable(false)} onClose={onClose} /> : (
       <section className={`table-modal ${lesson.zones.length === 2 ? 'has-two-zones' : ''}`} style={{ '--transition-color': transitionRole.color }} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="table-title">
         <div className="modal-heading">
           <div><span>{lesson.phase}</span><h2 id="table-title">Así queda en la tabla</h2></div>
@@ -180,8 +381,12 @@ function TableModal({ lesson, onClose }) {
             </div>
           </>
         ) : <ZoneMap />}
-        <p className="modal-caption"><i aria-hidden="true" />Solo mostramos la zona que cambia para que el texto se mantenga grande.</p>
+        <div className="modal-footer">
+          <p className="modal-caption"><i aria-hidden="true" />Este recorte mantiene el texto grande.</p>
+          <button className="open-full-table" onClick={() => setShowFullTable(true)}>Ver tabla completa</button>
+        </div>
       </section>
+      )}
     </div>
   )
 }
@@ -231,7 +436,7 @@ function App() {
         <button aria-label="Siguiente" onClick={() => setCurrent((value) => Math.min(value + 1, lessons.length - 1))} disabled={current === lessons.length - 1}><span>Siguiente</span><ArrowIcon direction="right" /></button>
       </footer>
       {openLayer === 'index' && <LessonIndex current={current} method={method} onSelect={goTo} onClose={() => setOpenLayer(null)} />}
-      {openLayer === 'table' && <TableModal lesson={lesson} onClose={() => setOpenLayer(null)} />}
+      {openLayer === 'table' && <TableModal lesson={lesson} method={method} current={current} onClose={() => setOpenLayer(null)} />}
     </main>
   )
 }
